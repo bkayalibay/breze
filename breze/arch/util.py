@@ -102,6 +102,12 @@ def cpu_tensor_to_gpu(tensor):
         result = theano.sandbox.cuda.ftensor3(name)
     elif tensor.ndim == 4:
         result = theano.sandbox.cuda.ftensor4(name)
+    elif tensor.ndim == 5:
+        _type = theano.sandbox.cuda.type.CudaNdarrayType(
+            dtype=theano.config.floatX,
+            broadcastable=((False,)*5) 
+        )
+        result = _type(name)
     else:
         raise ValueError('only up to dimension 4')
 
