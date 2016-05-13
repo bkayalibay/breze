@@ -207,6 +207,112 @@ class Lenet(Layer):
 
         self.output = self.mlp.output
 
+class Cnn3d(Layer):
+    
+    def __init__(self, inpt, image_height, image_width,
+                 image_depth, n_channel, n_hiddens, filter_shapes, 
+                 pool_shapes, hidden_transfers, batch_size=None,
+                 declare=None, name=None):
+        self.inpt = inpt
+        self.image_height = image_height
+        self.image_width = image_width
+        self.image_depth = image_depth
+        self.n_channel = n_channel
+        self.n_hiddens = n_hiddens
+        self.filter_shapes = filter_shapes
+        self.pool_shapes = pool_shapes
+        self.hidden_transfers = hidden_transfers
+        self.batch_size = batch_size
+
+        super(Cnn3d, self).__init__(declare=declare, name=name)
+
+    def _forward(self):
+        self.layers = []
+
+        n_inpts = [self.n_channel] + self.n_hiddens[:-1]
+        n_outputs = self.n_hiddens
+        transfers = self.hidden_transfers
+
+        inpt = self.inpt
+        height, width, depth = (self.image_height, self.image_width,
+                                self.image_depth)
+
+        for n, m, fs, ps, t in zip(n_inpts, n_outputs, self.filter_shapes,
+                                   self.pool_shapes, transfers):
+            filter_depth, filter_height, filter_width = fs
+            layer = simple.Conv3d(
+                inpt, height, width, depth, n, filter_height,
+                filter_width, filter_depth, m, 'identity',
+                n_samples=self.batch_size,
+                declare=self.declare  
+            )
+            self.layers.append(layer)
+   
+            pool_depth, pool_height, pool_width = ps
+            layer = simple.MaxPool3d(
+                layer.output, layer.output_height, layer.output_width,
+                layer.output_depth, pool_height, pool_width, pool_depth, 
+                layer.n_output, transfer=t 
+            )
+            self.layers.append(layer)
+
+            inpt = layer.output
+            height, width, depth = (layer.output_height, layer.output_width,
+                                    layer.output_depth)
+
+        self.output = self.layers[-1].output
+
+class Lenet3d(Layer):
+
+    def __init__(self, inpt, image_height, image_width, 
+                 image_depth, n_channel, n_hiddens_conv, 
+                 filter_shapes, pool_shapes, n_hiddens_full,
+                 hidden_transfers_conv, hidden_transfers_full,
+                 n_output, out_transfer, 
+                 declare=None, name=None):
+        self.inpt = inpt
+        self.image_height = image_height
+        self.image_width = image_width
+        self.image_depth = image_depth
+        self.n_channel = n_channel
+        self.n_hiddens_conv = n_hiddens_conv
+        self.n_hiddens_full = n_hiddens_full
+        self.filter_shapes = filter_shapes
+        self.pool_shapes = pool_shapes
+        self.hidden_transfers_conv = hidden_transfers_conv
+        self.hidden_transfers_full = hidden_transfers_full
+        self.n_output = n_output
+        self.out_transfer = out_transfer
+
+        super(Lenet3d, self).__init__(declare=declare, name=name)
+
+    def _forward(self):
+        self.cnn = Cnn3d(
+            self.inpt, self.image_height, self.image_width,
+            self.image_depth, self.n_channel, self.n_hiddens_conv,
+            self.filter_shapes, self.pool_shapes, 
+            self.hidden_transfers_conv,
+            declare=self.declare 
+        )
+
+        last_cnn_layer = self.cnn.layers[-1]
+        n_cnn_outputs = (last_cnn_layer.output_depth *
+                         last_cnn_layer.output_height * 
+                         last_cnn_layer.output_width *
+                         last_cnn_layer.n_output)
+
+        mlp_inpt = self.cnn.output.reshape((self.cnn.output.shape[0], -1))
+        self.mlp = Mlp(
+            mlp_inpt,
+            n_cnn_outputs,
+            self.n_hiddens_full,
+            self.n_output,
+            self.hidden_transfers_full,
+            self.out_transfer,
+            declare=self.declare
+        )
+
+        self.output = self.mlp.output
 
 class FastDropoutMlp(Layer):
 

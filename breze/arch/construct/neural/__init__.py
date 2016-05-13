@@ -6,3 +6,5 @@ from base import BidirectFastDropoutRnn
 from base import SimpleCnn2d
 from base import Lenet
 from base import Cnn2d
+from base import Lenet3d
+from base import Cnn3d

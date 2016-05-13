@@ -6,6 +6,8 @@
 import numpy as np
 
 from theano import tensor as T
+from theano.tensor.type import TensorType
+from theano import config
 
 from breze.arch.construct.simple import SupervisedLoss
 from breze.arch.construct import neural
@@ -142,3 +144,82 @@ class Lenet(SupervisedModel):
                                  loss=self.loss_layer.total,
                                  parameters=parameters)
         self.exprs['imp_weight'] = imp_weight
+
+class Lenet3d(SupervisedModel):
+    
+    def __init__(self, image_height, image_width, image_depth,
+                 n_channel, n_hiddens_conv, filter_shapes, pool_shapes,
+                 n_hiddens_full, n_output, hidden_transfers_conv,
+                 hidden_transfers_full, out_transfer, loss, optimizer='adam',
+                 batch_size=1, max_iter=1000, verbose=False):
+        self.image_height = image_height
+        self.image_width = image_width
+        self.image_depth = image_depth
+        self.n_channel = n_channel
+        self.n_hiddens_conv = n_hiddens_conv
+        self.n_hiddens_full = n_hiddens_full
+        self.filter_shapes = filter_shapes
+        self.pool_shapes = pool_shapes
+        self.n_output = n_output
+        self.hidden_transfers_conv = hidden_transfers_conv
+        self.hidden_transfers_full = hidden_transfers_full
+        self.out_transfer = out_transfer
+        self.loss_ident = loss
+        self.optimizer = optimizer
+        self.batch_size = batch_size
+        self.max_iter = max_iter
+        self.verbose = verbose
+
+        self._init_exprs()
+
+    def _init_exprs(self):
+        inpt = tensor5('inpt')
+        inpt.tag.test_value = np.zeros((
+            2, self.image_depth, self.n_channel,
+            self.image_height, self.image_width
+        ))
+
+        target = T.matrix('target')
+        target.tag.test_value = np.zeros((
+            2, self.n_output
+        ))
+
+        parameters = ParameterSet()
+       
+        self.lenet = neural.Lenet3d(
+            inpt, self.image_height,
+            self.image_width, self.image_depth,
+            self.n_channel, self.n_hiddens_conv,
+            self.filter_shapes, self.pool_shapes,
+            self.n_hiddens_full, self.hidden_transfers_conv,
+            self.hidden_transfers_full, self.n_output,
+            self.out_transfer,
+            declare=parameters.declare
+        )
+
+        if self.imp_weight:
+            imp_weight = T.matrix('imp_weight')    
+        else:
+            imp_weight = None
+
+        self.loss_layer = SupervisedLoss(
+            target, self.lenet.output, loss=self.loss_ident,
+            imp_weight=imp_weight, declare=parameters.declare
+        )
+
+        SupervisedModel.__init__(self, inpt=inpt, target=target,
+                                 output=self.lenet.output,
+                                 loss=self.loss_layer.total,
+                                 parameters=parameters)
+
+        self.exprs['imp_weight'] = imp_weight
+
+def tensor5(name=None, dtype=None):
+    """
+    Returns a symbolic 5D tensor variable.
+    """
+    if dtype is None:
+        dtype = config.floatX
+
+    type = TensorType(dtype, ((False,)*5))
+    return type(name)

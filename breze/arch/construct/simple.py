@@ -4,6 +4,7 @@ import numpy as np
 
 import theano.tensor as T
 from theano.tensor.nnet import conv
+from theano.tensor.nnet import conv3d2d
 from theano.tensor.signal import downsample
 
 from breze.arch.component import transfer as _transfer, loss as _loss
@@ -179,6 +180,151 @@ class MaxPool2d(Layer):
         self.output_in = downsample.max_pool_2d(
             input=self.inpt, ds=(self.pool_height, self.pool_width),
             ignore_border=True)
+
+        f = lookup(self.transfer, _transfer)
+        self.output = f(self.output_in)
+
+class Conv3d(Layer):
+    def __init__(self, inpt, inpt_height, inpt_width,
+                 inpt_depth, n_inpt, filter_height,
+                 filter_width, filter_depth, n_output,
+                 transfer='identity', n_samples=None,
+                 declare=None, name=None):
+        """
+        Create one layer of 3d convolution.
+        """
+        self.inpt = inpt
+        self.inpt_height = inpt_height
+        self.inpt_width = inpt_width
+        self.inpt_depth = inpt_depth
+        self.n_inpt = n_inpt
+
+        self.filter_height = filter_height
+        self.filter_width = filter_width
+        self.filter_depth = filter_depth 
+
+        self.n_output = n_output
+        self.transfer = transfer
+        self.n_samples = n_samples
+     
+        self.output_height = inpt_height - filter_height + 1
+        self.output_width = inpt_width - filter_height + 1
+        self.output_depth = inpt_depth - filter_depth + 1
+
+        if not self.output_height > 0:
+            raise ValueError('inpt height smaller than filter height')
+        if not self.output_width > 0:
+            raise ValueError('inpt width smaller than filter width')
+        if not self.output_depth > 0:
+            raise ValueError('inpt depth smaller than filter depth')
+
+        super(Conv3d, self).__init__(declare=declare, name=name)
+
+    def _forward(self):
+        self.weights = self.declare(
+            (self.n_output, self.filter_depth, self.n_inpt,
+             self.filter_height, self.filter_width)
+        )
+        self.bias = self.declare((self.n_output,))
+
+        inpt_shape = (self.n_samples, self.inpt_depth, self.n_inpt,
+                      self.inpt_height, self.inpt_width)
+        filter_shape= (self.n_output, self.filter_depth, self.n_inpt,
+                       self.filter_height, self.filter_width)        
+        
+        self.output_in = conv3d2d.conv3d(
+            signals=self.inpt, 
+            filters=self.weights, 
+            filters_shape=filter_shape    
+        )
+
+        f = lookup(self.transfer, _transfer)
+        self.output = f(self.output_in)
+
+def max_pool_3d(inpt, inpt_shape, ds, ignore_border=True):
+    # Downsize 'into the depth' by downsizing twice.
+    inpt_shape_4d = (
+        inpt_shape[0]*inpt_shape[1],
+        inpt_shape[2],
+        inpt_shape[3],
+        inpt_shape[4]
+    )
+
+    inpt_as_tensor4 = T.reshape(inpt, inpt_shape_4d, ndim=4)
+    
+    # The first pooling only downsizes the height and the width.
+    pool_out1 = downsample.max_pool_2d(inpt_as_tensor4, (ds[1], ds[2]), 
+                                       ignore_border=True) 
+    out_shape1 = T.join(0, inpt_shape[:-2], pool_out1.shape[-2:])
+
+    inpt_pooled_once = T.reshape(pool_out1, out_shape1, ndim=5)
+
+    # Shuffle dimensions so the depth is the last dimension.
+    inpt_shuffled = inpt_pooled_once.dimshuffle(0, 4, 2, 3, 1)
+    
+    shuffled_shape = inpt_shuffled.shape
+    # Reshape input to be 4 dimensional.
+    shuffle_shape_4d = (
+        shuffled_shape[0] * shuffled_shape[1],
+        shuffled_shape[2],
+        shuffled_shape[3],
+        shuffled_shape[4]
+    )
+
+    inpt_shuffled_4d = T.reshape(inpt_shuffled, shuffle_shape_4d, ndim=4)
+
+    pool_out2 = downsample.max_pool_2d(inpt_shuffled_4d, (1,ds[0]), 
+                            ignore_border=True)
+    out_shape2 = T.join(0, shuffled_shape[:-2], pool_out2.shape[-2:]) 
+
+    inpt_pooled_twice = T.reshape(pool_out2, out_shape2, ndim=5)
+    pool_output_fin = inpt_pooled_twice.dimshuffle(0, 4, 2, 3, 1)
+
+    return pool_output_fin
+
+class MaxPool3d(Layer):
+
+    def __init__(self, inpt, inpt_height, inpt_width, inpt_depth,
+                 pool_height, pool_width, pool_depth, n_output,
+                 transfer='identity', declare=None, name=None):
+        """
+        One layer of 3D max pooling.
+        """
+
+        self.inpt = inpt
+        self.inpt_height = inpt_height
+        self.inpt_width = inpt_width
+        self.inpt_depth = inpt_depth
+
+        self.pool_height = pool_height
+        self.pool_width = pool_width
+        self.pool_depth = pool_depth
+
+        self.transfer = transfer
+        self.output_height, _ = divmod(inpt_height, pool_height)
+        self.output_width, _ = divmod(inpt_width, pool_width)
+        self.output_depth, _ = divmod(inpt_depth, pool_depth)
+
+        if not self.output_height > 0:
+            raise ValueError('inpt height smaller than pool height')
+        if not self.output_width > 0:
+            raise ValueError('inpt width smaller than pool width')
+        if not self.output_depth > 0:
+            raise ValueError('inpt depth smaller than pool depth')
+
+        self.n_output = n_output
+
+        super(MaxPool3d, self).__init__(declare=declare, name=name)
+
+    def _forward(self):
+        poolsize = (self.pool_depth, self.pool_height, self.pool_width)
+        
+        self.output_in = max_pool_3d(
+            inpt=self.inpt, 
+            inpt_shape=self.inpt.shape, 
+            ds=poolsize, 
+            ignore_border=True
+        )
 
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)
