@@ -5,6 +5,7 @@ import numpy as np
 import theano.tensor as T
 from theano.tensor.nnet import conv
 from theano.tensor.nnet import conv3d2d
+from theano.tensor.nnet.Conv3D import conv3D
 from theano.tensor.signal import downsample
 
 from breze.arch.component import transfer as _transfer, loss as _loss
@@ -189,7 +190,8 @@ class Conv3d(Layer):
                  inpt_depth, n_inpt, filter_height,
                  filter_width, filter_depth, n_output,
                  transfer='identity', n_samples=None,
-                 declare=None, name=None):
+                 declare=None, name=None,
+                 implementation='conv3D'):
         """
         Create one layer of 3d convolution.
         """
@@ -218,6 +220,8 @@ class Conv3d(Layer):
         if not self.output_depth > 0:
             raise ValueError('inpt depth smaller than filter depth')
 
+        self.implementation = implementation
+
         super(Conv3d, self).__init__(declare=declare, name=name)
 
     def _forward(self):
@@ -232,11 +236,24 @@ class Conv3d(Layer):
         filter_shape= (self.n_output, self.filter_depth, self.n_inpt,
                        self.filter_height, self.filter_width)        
         
-        self.output_in = conv3d2d.conv3d(
-            signals=self.inpt, 
-            filters=self.weights, 
-            filters_shape=filter_shape    
-        )
+        if self.implementation == 'conv3d2d':
+            self.output_in = conv3d2d.conv3d(
+                signals=self.inpt, 
+                filters=self.weights, 
+                filters_shape=filter_shape    
+            )
+        elif self.implementation == 'conv3D':
+            filters_flip = self.weights[:,::-1,:,::-1,::-1]
+            self.output_in = conv3D(
+                V=self.inpt.dimshuffle(0,3,4,1,2),
+                W=filters_flip.dimshuffle(0,3,4,1,2),
+                b=self.bias,
+                d=(1,1,1)
+            )
+            self.output_in = self.output_in.dimshuffle(0,3,4,1,2)
+        else:
+            msg = 'This class only supports conv3d2d and conv3D'
+            raise NotImplementedError(msg)
 
         f = lookup(self.transfer, _transfer)
         self.output = f(self.output_in)

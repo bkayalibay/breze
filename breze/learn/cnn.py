@@ -151,7 +151,8 @@ class Lenet3d(SupervisedModel):
                  n_channel, n_hiddens_conv, filter_shapes, pool_shapes,
                  n_hiddens_full, n_output, hidden_transfers_conv,
                  hidden_transfers_full, out_transfer, loss, optimizer='adam',
-                 batch_size=1, max_iter=1000, verbose=False):
+                 batch_size=1, max_iter=1000,
+                 verbose=False, implementation='conv3D'):
         self.image_height = image_height
         self.image_width = image_width
         self.image_depth = image_depth
@@ -169,6 +170,7 @@ class Lenet3d(SupervisedModel):
         self.batch_size = batch_size
         self.max_iter = max_iter
         self.verbose = verbose
+        self.implementation = implementation
 
         self._init_exprs()
 
@@ -194,7 +196,8 @@ class Lenet3d(SupervisedModel):
             self.n_hiddens_full, self.hidden_transfers_conv,
             self.hidden_transfers_full, self.n_output,
             self.out_transfer,
-            declare=parameters.declare
+            declare=parameters.declare,
+            implementation=self.implementation
         )
 
         if self.imp_weight:

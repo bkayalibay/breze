@@ -212,7 +212,7 @@ class Cnn3d(Layer):
     def __init__(self, inpt, image_height, image_width,
                  image_depth, n_channel, n_hiddens, filter_shapes, 
                  pool_shapes, hidden_transfers, batch_size=None,
-                 declare=None, name=None):
+                 declare=None, name=None, implementation='conv3D'):
         self.inpt = inpt
         self.image_height = image_height
         self.image_width = image_width
@@ -223,7 +223,7 @@ class Cnn3d(Layer):
         self.pool_shapes = pool_shapes
         self.hidden_transfers = hidden_transfers
         self.batch_size = batch_size
-
+        self.implementation = implementation
         super(Cnn3d, self).__init__(declare=declare, name=name)
 
     def _forward(self):
@@ -244,7 +244,8 @@ class Cnn3d(Layer):
                 inpt, height, width, depth, n, filter_height,
                 filter_width, filter_depth, m, 'identity',
                 n_samples=self.batch_size,
-                declare=self.declare  
+                declare=self.declare,
+                implementation=self.implementation  
             )
             self.layers.append(layer)
    
@@ -269,7 +270,8 @@ class Lenet3d(Layer):
                  filter_shapes, pool_shapes, n_hiddens_full,
                  hidden_transfers_conv, hidden_transfers_full,
                  n_output, out_transfer, 
-                 declare=None, name=None):
+                 declare=None, name=None,
+                 implementation='conv3D'):
         self.inpt = inpt
         self.image_height = image_height
         self.image_width = image_width
@@ -283,6 +285,7 @@ class Lenet3d(Layer):
         self.hidden_transfers_full = hidden_transfers_full
         self.n_output = n_output
         self.out_transfer = out_transfer
+        self.implementation = implementation
 
         super(Lenet3d, self).__init__(declare=declare, name=name)
 
@@ -292,7 +295,8 @@ class Lenet3d(Layer):
             self.image_depth, self.n_channel, self.n_hiddens_conv,
             self.filter_shapes, self.pool_shapes, 
             self.hidden_transfers_conv,
-            declare=self.declare 
+            declare=self.declare,
+            implementation=self.implementation 
         )
 
         last_cnn_layer = self.cnn.layers[-1]
