@@ -4,7 +4,7 @@ import numpy as np
 
 import theano.tensor as T
 from theano.tensor.nnet import conv
-from theano.tensor.signal import downsample
+from theano.tensor.signal import pool
 
 from breze.arch.component import transfer as _transfer, loss as _loss
 from breze.arch.construct.base import Layer
@@ -176,7 +176,7 @@ class MaxPool2d(Layer):
         super(MaxPool2d, self).__init__(declare=declare, name=name)
 
     def _forward(self):
-        self.output_in = downsample.max_pool_2d(
+        self.output_in = pool.pool_2d(
             input=self.inpt, ds=(self.pool_height, self.pool_width),
             ignore_border=True)
 
